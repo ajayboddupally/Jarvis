@@ -2,147 +2,125 @@
 
 Jarvis is an AI platform being built as a modular intelligence system.
 
-## Current component
-
-This repository starts with the Jarvis API Gateway. It provides:
-
-- API-key authentication
-- Request IDs
-- CORS configuration
-- Request-size protection
-- Redis-backed rate limiting
-- Usage metering
-- Service routing
-- Health checks
-- API versioning
-- Secure configuration
-
-The gateway is deliberately separated from intelligence, agent, and model services.
-
 ## Architecture
 
 ```
 Client
   |
   v
-Jarvis API Gateway
-  |-- Authentication
-  |-- Rate limiting
-  |-- Request IDs
-  |-- Usage metering
-  |-- Routing
+Jarvis API Gateway :8000
   |
-  +--> Intelligence Service
-  +--> Agent Service
-  +--> Future Model Services
+  v
+Jarvis Intelligence Service :8001
+  |
+  +--> Context
+  +--> Conversation Memory
+  +--> Reasoning Planner
+  +--> Model Provider
+  |
+  v
+PostgreSQL
+
+Redis
+  |
+  +--> Gateway rate limiting
 ```
 
-## Local development
+## Implemented
 
-Create a virtual environment:
+### Gateway
+
+- API-key authentication
+- Admin API-key creation
+- Request IDs
+- Request-size protection
+- Redis-backed rate limiting
+- PostgreSQL usage metering
+- CORS
+- API versioning
+- Service routing
+- Health endpoints
+
+### Intelligence Service
+
+- Conversation persistence
+- Context loading
+- Message history
+- Request classification
+- Reasoning-plan abstraction
+- Model-provider interface
+- Local provider placeholder
+- Optional external HTTP model provider
+- Token usage tracking
+- Conversation IDs
+- Model routing foundation
+
+The local provider is intentionally a deterministic placeholder. It is not presented as a trained Jarvis model.
+
+## Run with Docker
+
+Copy the environment file:
 
 ```bash
-python -m venv .venv
+cp .env.example .env
 ```
 
-Windows:
+Set strong values for:
 
-```powershell
-.venv\\Scripts\\activate
+```
+JWT_SECRET
+ADMIN_API_KEY
+API_KEY_PEPPER
 ```
 
-macOS/Linux:
+Start everything:
 
 ```bash
-source .venv/bin/activate
+docker compose up --build
 ```
 
-Install dependencies:
+Gateway:
 
-```bash
-pip install -r requirements.txt
+```
+http://127.0.0.1:8000
 ```
 
-Copy `.env.example` to `.env` and replace every secret.
-
-Start PostgreSQL and Redis:
-
-```bash
-docker compose up -d postgres redis
-```
-
-Start the gateway:
-
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-Open:
+Gateway docs:
 
 ```
 http://127.0.0.1:8000/docs
 ```
 
-## Authentication
-
-Client requests use:
+Intelligence service:
 
 ```
-Authorization: Bearer <jarvis-api-key>
+http://127.0.0.1:8001
 ```
 
-The gateway stores only a keyed HMAC digest of an API key. The raw key is returned once when the key is created.
+## Create an API key
 
-Admin key creation uses:
-
-```
-X-Admin-Key: <ADMIN_API_KEY>
-```
-
-## API
-
-Health:
-
-```
-GET /health
-GET /v1/health
+```bash
+curl -X POST http://127.0.0.1:8000/v1/admin/api-keys \
+  -H "X-Admin-Key: YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"local-dev","owner":"aj"}'
 ```
 
-Models:
+Copy the returned API key.
 
-```
-GET /v1/models
-Authorization: Bearer <key>
-```
+## Send a request
 
-Chat:
-
-```
-POST /v1/chat
-Authorization: Bearer <key>
-Content-Type: application/json
-
-{
-  "model": "jarvis-1",
-  "message": "Hello Jarvis"
-}
+```bash
+curl -X POST http://127.0.0.1:8000/v1/chat \
+  -H "Authorization: Bearer YOUR_JARVIS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"jarvis-local","message":"Hello Jarvis"}'
 ```
 
-Create API key:
+The gateway forwards the request to the intelligence service.
 
-```
-POST /v1/admin/api-keys
-X-Admin-Key: <ADMIN_API_KEY>
-Content-Type: application/json
+## Current limitation
 
-{
-  "name": "local-development",
-  "owner": "aj"
-}
-```
+Jarvis does not have a proprietary trained foundation model yet. The intelligence service currently provides the architecture around the model layer and uses a deterministic local provider unless an external HTTP provider is configured.
 
-## Security
-
-Never commit `.env`, production secrets, private keys, or real API keys.
-
-The gateway is the first layer. Future releases will add organization/project isolation, quotas, billing, model routing, streaming, tool execution, and the Jarvis intelligence service.
+The next stage is the tool system and agent runtime.
