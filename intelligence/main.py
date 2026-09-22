@@ -6,11 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from intelligence.config import settings
 from intelligence.database import Base, engine, get_db
 from intelligence.engine import IntelligenceEngine
+from intelligence.models import ModelRouter
 from intelligence.schemas import ChatRequest, ChatResponse
 from intelligence.tools.registry import create_default_registry
 
 
 engine_runtime = IntelligenceEngine()
+model_router = ModelRouter()
 
 
 @asynccontextmanager
@@ -24,7 +26,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.service_name,
     version=settings.service_version,
-    description="Core reasoning, context, memory, tools and model-routing service for Jarvis.",
+    description="Jarvis model routing and inference orchestration service.",
     lifespan=lifespan,
 )
 
@@ -40,12 +42,24 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"service": "jarvis-intelligence", "status": "healthy"}
+    return {
+        "service": "jarvis-intelligence",
+        "status": "healthy",
+    }
+
+
+@app.get("/v1/models")
+async def list_models():
+    return {
+        "object": "list",
+        "data": model_router.available_models(),
+    }
 
 
 @app.get("/v1/tools")
 async def list_tools():
     registry = create_default_registry()
+
     return {
         "object": "list",
         "data": [
@@ -66,6 +80,9 @@ async def chat(
 ):
     try:
         return await engine_runtime.generate_response(db, payload)
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         await db.rollback()
         raise HTTPException(
