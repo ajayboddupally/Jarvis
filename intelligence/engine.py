@@ -21,11 +21,7 @@ class IntelligenceEngine:
         db: AsyncSession,
         request: ChatRequest,
     ) -> ChatResponse:
-        conversation = await get_or_create_conversation(
-            db,
-            request.conversation_id,
-        )
-
+        conversation = await get_or_create_conversation(db, request.conversation_id)
         history = await load_context(db, conversation.id)
         context = build_context(history, request.message)
 
@@ -34,32 +30,19 @@ class IntelligenceEngine:
         context = append_tool_result(context, tool_output)
 
         provider = self.models.resolve(request.model)
-
         result = await provider.generate(
             GenerationRequest(
                 model=request.model,
                 messages=context,
-                temperature=0.2,
-                max_tokens=1024,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
             )
         )
 
-        await save_message(
-            db,
-            conversation.id,
-            "user",
-            request.message,
-            result.input_tokens,
-        )
+        await save_message(db, conversation.id, "user", request.message, result.input_tokens)
 
         if tool_output:
-            await save_message(
-                db,
-                conversation.id,
-                "tool",
-                str(tool_output),
-                0,
-            )
+            await save_message(db, conversation.id, "tool", str(tool_output), 0)
 
         await save_message(
             db,
@@ -68,7 +51,6 @@ class IntelligenceEngine:
             result.text,
             result.output_tokens,
         )
-
         await db.commit()
 
         return ChatResponse(

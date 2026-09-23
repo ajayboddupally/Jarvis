@@ -1,0 +1,5 @@
+# Optional dependencies for real local model inference.
+# The base requirements remain lightweight for gateway/CI environments.
+torch>=2.4,<3
+transformers>=4.45,<5
+safetensors>=0.4,<1
